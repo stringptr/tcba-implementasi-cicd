@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 DEFAULT_HISTORIC_START_DATE = "2023-01-01"
+DEFAULT_LOCAL_DIR = "./data"
 DEFAULT_BRONZE_PREFIX = "bronze"
 DEFAULT_EMPTY_GRACE_DAYS = 3
 DEFAULT_LOOKBACK_DAYS = 7
@@ -28,6 +29,7 @@ class Settings:
     usgs_api_key: str | None
     azure_storage_account: str
     azure_storage_container: str
+    local_output_dir: str
     bronze_prefix: str
     empty_grace_days: int
     lookback_days: int
@@ -44,6 +46,7 @@ def get_settings(start_date: str | None = None) -> Settings:
         usgs_api_key=_env("USGS_API_KEY"),
         azure_storage_account=_env("AZURE_STORAGE_ACCOUNT", ""),
         azure_storage_container=_env("AZURE_STORAGE_CONTAINER", ""),
+        local_output_dir=_env("BRONZE_LOCAL_DIR", DEFAULT_LOCAL_DIR),
         bronze_prefix=_env("BRONZE_PREFIX", DEFAULT_BRONZE_PREFIX),
         empty_grace_days=int(
             _env("EMPTY_GRACE_DAYS", str(DEFAULT_EMPTY_GRACE_DAYS))

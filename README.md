@@ -73,8 +73,9 @@ Add one **Secret** (the USGS API key is sensitive):
 
 ## Workflows
 
-- `.github/workflows/ci.yml` — on push/PR to `main`/`dev`: ruff lint + import
-  smoke test.
+- `.github/workflows/ci.yml` — on push/PR to `main`/`dev`: ruff lint, import
+  smoke test, then run the scraping code over a 1-day window into a local
+  directory (needs the `USGS_API_KEY` secret).
 - `.github/workflows/cd.yml` — on a `0 */6 * * *` schedule and via
   **Run workflow** (`workflow_dispatch`): OIDC login, then run the pipeline.
 
@@ -91,4 +92,7 @@ python -m ingest.pipeline
 
 Optional env overrides: `USGS_HISTORIC_START_DATE`, `OPEN_METEO_HISTORIC_START_DATE`,
 `BRONZE_PREFIX` (default `bronze`), `LOOKBACK_DAYS` (default 7),
-`EMPTY_GRACE_DAYS` (default 3), `STATIONS`.
+`EMPTY_GRACE_DAYS` (default 3), `STATIONS`, `BRONZE_LOCAL_DIR` (default `./data`).
+
+When `AZURE_STORAGE_ACCOUNT`/`AZURE_STORAGE_CONTAINER` are unset, output is
+written under `BRONZE_LOCAL_DIR` instead of Azure (used by CI and local runs).

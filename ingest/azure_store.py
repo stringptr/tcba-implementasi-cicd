@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import date, timedelta
+from pathlib import Path
 
 from .settings import Settings
 
@@ -88,7 +89,20 @@ def _blob_prefix(settings: Settings, prefix: str) -> str:
     return f"{settings.bronze_prefix}/{prefix}"
 
 
+def _use_local(settings: Settings) -> bool:
+    return not (settings.azure_storage_account and settings.azure_storage_container)
+
+
 def existing_dates(settings: Settings, prefix: str) -> set[str]:
+    if _use_local(settings):
+        base = Path(settings.local_output_dir) / settings.bronze_prefix / prefix
+        if not base.is_dir():
+            return set()
+        return {
+            part.parent.name[len(PARTITION_PREFIX):]
+            for part in base.glob(f"{PARTITION_PREFIX}*/{PART_FILE}")
+        }
+
     container = _container_client(settings)
     blob_prefix = f"{_blob_prefix(settings, prefix)}/{PARTITION_PREFIX}"
     dates: set[str] = set()
@@ -107,12 +121,16 @@ def write_payload(
     ingest_date: str,
     payload: dict,
 ) -> str:
-    blob_name = (
-        f"{_blob_prefix(settings, prefix)}/"
-        f"{PARTITION_PREFIX}{ingest_date}/{PART_FILE}"
-    )
+    relative = f"{prefix}/{PARTITION_PREFIX}{ingest_date}/{PART_FILE}"
     body = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
+    if _use_local(settings):
+        path = Path(settings.local_output_dir) / settings.bronze_prefix / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(body, encoding="utf-8")
+        return str(path)
+
+    blob_name = f"{settings.bronze_prefix}/{relative}"
     blob = _container_client(settings).get_blob_client(blob_name)
     blob.upload_blob(body.encode("utf-8"), overwrite=True)
     return blob_name
