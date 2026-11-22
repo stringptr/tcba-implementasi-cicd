@@ -1,14 +1,11 @@
 name: CD - Ingest to Azure Data Lake
 
-# Continuous deployment: the scraping pipeline runs on a 6-hourly schedule and
-# can be triggered manually from the Actions tab (Run workflow).
 on:
   workflow_dispatch:
   schedule:
-    # Every 6 hours, on the hour (UTC).
     - cron: "0 */6 * * *"
 
-# Federated credentials (OIDC) need an id token; no client secret is stored.
+# federated credential (OIDC): no client secret is stored
 permissions:
   id-token: write
   contents: read

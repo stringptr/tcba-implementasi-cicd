@@ -1,10 +1,3 @@
-"""USGS monitoring locations used by the hydrology pipeline.
-
-Coordinates are the official NAD83 decimal lat/lon published by the USGS Site
-Service for each monitoring location. Every timestamp handled by the pipeline
-is UTC.
-"""
-
 from __future__ import annotations
 
 import os
@@ -13,12 +6,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Station:
-    """A USGS monitoring location enriched with the coordinates needed by
-    Open-Meteo."""
-
-    #: Identifier in the USGS Water Data (OGC) API, e.g. ``USGS-11525670``.
     id: str
-    #: Bare site number as used by the legacy NWIS services, e.g. ``11525670``.
     site_no: str
     name: str
     latitude: float
@@ -51,13 +39,6 @@ STATIONS: tuple[Station, ...] = (
 
 
 def get_stations() -> tuple[Station, ...]:
-    """Return the active stations.
-
-    ``STATIONS`` (comma separated) can restrict the selection to a subset,
-    matching either the ``USGS-`` prefixed id or the bare site number. When the
-    variable is unset or matches nothing, all three project stations are used.
-    """
-
     raw = os.getenv("STATIONS")
     if not raw:
         return STATIONS

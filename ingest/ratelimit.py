@@ -1,11 +1,3 @@
-"""Request throttling for the upstream APIs.
-
-USGS allows at most 1000 requests per hour and Open-Meteo at most 5000. A
-``RateLimiter`` enforces a minimum spacing between calls which guarantees the
-rolling-hour quota is never exceeded. ``get_json`` additionally honours HTTP
-429 responses via the ``Retry-After`` header.
-"""
-
 from __future__ import annotations
 
 import threading
@@ -14,7 +6,6 @@ from typing import Any
 
 import requests
 
-#: Published per-hour request quotas.
 USGS_REQUESTS_PER_HOUR = 1_000
 OPEN_METEO_REQUESTS_PER_HOUR = 5_000
 
@@ -23,8 +14,6 @@ DEFAULT_MAX_429_RETRIES = 5
 
 
 class RateLimiter:
-    """Space requests so no more than ``requests_per_hour`` are sent."""
-
     def __init__(self, requests_per_hour: int) -> None:
         if requests_per_hour <= 0:
             raise ValueError("requests_per_hour must be positive")
@@ -50,8 +39,6 @@ def get_json(
     timeout: int = DEFAULT_TIMEOUT,
     max_429_retries: int = DEFAULT_MAX_429_RETRIES,
 ) -> Any:
-    """GET ``url`` (throttled) and return the decoded JSON body."""
-
     attempt = 0
     while True:
         limiter.wait()

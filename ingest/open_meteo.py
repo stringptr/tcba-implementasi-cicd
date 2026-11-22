@@ -1,18 +1,3 @@
-"""Open-Meteo meteorology ingestion.
-
-Fetches the raw JSON archive response for each station and lands it in the
-bronze prefix verbatim (no column renames, no metadata columns). Data is
-partitioned by observation day (UTC): every date from
-``OPEN_METEO_HISTORIC_START_DATE`` (default ``2023-01-01``) through yesterday
-gets its own ``ingest_date=YYYY-MM-DD`` partition. Each file contains that day
-plus the previous ``LOOKBACK_DAYS`` days (default 7). Existing partitions are
-skipped, so a long backfill can be stopped and resumed without repeating
-completed days.
-
-Missing dates are fetched in calendar-year batches and split into one file per
-day. Requests are throttled to the documented Open-Meteo quota.
-"""
-
 from __future__ import annotations
 
 from datetime import date, timedelta
@@ -32,7 +17,6 @@ from .stations import Station, get_stations
 
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 
-#: The twelve hourly variables requested by the project.
 HOURLY_VARIABLES: tuple[str, ...] = (
     "precipitation",
     "rain",
@@ -52,8 +36,6 @@ HOURLY_VARIABLES: tuple[str, ...] = (
 def fetch_chunk(
     station: Station, start_date: str, end_date: str
 ) -> tuple[dict, list[str]]:
-    """Fetch one (<= 1 year) window and return ``(payload, variable_keys)``."""
-
     payload = get_json(
         OPEN_METEO_LIMITER,
         ARCHIVE_URL,
@@ -80,8 +62,6 @@ def fetch_chunk(
 
 
 def split_hourly_by_date(payload: dict, variable_keys: list[str]) -> dict[str, dict]:
-    """Slice a multi-day hourly payload into per-day ``hourly`` objects."""
-
     hourly = payload["hourly"]
     times = hourly["time"]
 
@@ -106,8 +86,6 @@ def _day_payload(payload: dict, hourly: dict) -> dict:
 
 
 def ingest_station_weather(station: Station, settings: Settings) -> list[str]:
-    """Fetch every missing day of Open-Meteo data for a single station."""
-
     prefix = open_meteo_prefix(station.site_no)
     existing = existing_dates(settings, prefix)
     missing = [
@@ -133,8 +111,8 @@ def ingest_station_weather(station: Station, settings: Settings) -> list[str]:
     lookback = settings.lookback_days
     for run_start, run_end in contiguous_runs(missing):
         for chunk_start, chunk_end in year_chunks(run_start, run_end):
-            # Fetch a lookback lead-in so each day's window is complete even
-            # across year boundaries.
+            # fetch a lookback lead-in so each day's window is complete across
+            # year boundaries
             fetch_start = window_start(
                 chunk_start, settings.open_meteo_historic_start_date, lookback
             )
@@ -159,7 +137,7 @@ def ingest_station_weather(station: Station, settings: Settings) -> list[str]:
                         combined[key].extend(hourly[key])
 
                 if not combined_time and day > grace_cutoff:
-                    # Recent days may not be published yet; retry next run.
+                    # recent days may not be published yet; retry next run
                     continue
 
                 hourly = {"time": combined_time, **combined}
@@ -175,8 +153,6 @@ def ingest_station_weather(station: Station, settings: Settings) -> list[str]:
 
 
 def ingest_open_meteo(start_date: str | None = None) -> list[str]:
-    """Ingest raw Open-Meteo JSON for every active station."""
-
     settings = get_settings(start_date)
     stations = get_stations()
 

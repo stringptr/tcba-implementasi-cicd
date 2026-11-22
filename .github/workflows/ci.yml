@@ -1,8 +1,5 @@
 name: CI
 
-# Continuous integration: runs on every push and pull request targeting the two
-# long-lived branches. A feature branch merged into dev (then main) turns this
-# check green before the merge.
 on:
   push:
     branches: [main, dev]

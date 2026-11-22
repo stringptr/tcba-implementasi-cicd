@@ -1,23 +1,3 @@
-"""USGS hydrology ingestion.
-
-Pulls raw JSON straight from the USGS Water Data OGC API and lands it in the
-bronze prefix of the data lake without any transformation:
-
-* ``00060`` (discharge) is ingested from the ``daily`` collection.
-* ``00065`` (gage height) is ingested from the ``continuous`` collection.
-
-Data is partitioned by observation day (UTC): every date from
-``USGS_HISTORIC_START_DATE`` (default ``2023-01-01``) through yesterday (UTC)
-gets its own ``ingest_date=YYYY-MM-DD/part-000.json``. Each file contains that
-day plus the previous ``LOOKBACK_DAYS`` days (default 7). Existing partitions
-are skipped, so a long backfill can be stopped and resumed without repeating
-completed days.
-
-Missing dates are fetched in batches: contiguous ranges are downloaded in
-calendar-year chunks (the API caps the continuous collection at 1100 days) and
-split into one file per day. Requests are throttled to the documented quota.
-"""
-
 from __future__ import annotations
 
 from datetime import date, timedelta
@@ -39,15 +19,13 @@ API_BASE = "https://api.waterdata.usgs.gov/ogcapi/v1/collections"
 DAILY_ITEMS = f"{API_BASE}/daily/items"
 CONTINUOUS_ITEMS = f"{API_BASE}/continuous/items"
 
-#: USGS parameter codes and the collection each one is fetched from.
 USGS_PARAMETERS: tuple[tuple[str, str, str], ...] = (
-    ("daily", "00060", DAILY_ITEMS),  # discharge, daily values
-    ("continuous", "00065", CONTINUOUS_ITEMS),  # gage height, continuous values
+    ("daily", "00060", DAILY_ITEMS),
+    ("continuous", "00065", CONTINUOUS_ITEMS),
 )
 
-#: Page size used while walking the paginated response.
 PAGE_LIMIT = 50_000
-#: Safety guard so a malformed ``next`` link cannot loop forever.
+# guard against a malformed next link looping forever
 MAX_PAGES = 1_000
 
 
@@ -59,8 +37,6 @@ def _next_link(payload: dict) -> str | None:
 
 
 def fetch_collection(url: str, params: dict, api_key: str) -> dict:
-    """Fetch every page of an OGC API collection and merge the features."""
-
     headers = {"X-Api-Key": api_key}
     features: list[dict] = []
     merged: dict | None = None
@@ -83,7 +59,7 @@ def fetch_collection(url: str, params: dict, api_key: str) -> dict:
 
         features.extend(payload.get("features", []))
         next_url = _next_link(payload)
-        next_params = None  # the next link already carries the query string
+        next_params = None
 
     if merged is None:
         merged = {"type": "FeatureCollection", "features": []}
@@ -104,13 +80,8 @@ def fetch_chunk(
     start_date: str,
     end_date: str,
 ) -> dict:
-    """Fetch a single (<= 1 year) date window.
-
-    The ``continuous`` collection treats the end date as exclusive (it only
-    returns the midnight sample), so one extra day is requested to capture the
-    complete final day. The caller filters out anything past ``end_date``.
-    """
-
+    # the continuous collection treats end_date as exclusive, so request one
+    # extra day to capture the complete final day
     request_end = (
         date.fromisoformat(end_date) + timedelta(days=1)
     ).isoformat()
@@ -120,8 +91,6 @@ def fetch_chunk(
 
 
 def split_features_by_date(features: list[dict]) -> dict[str, list[dict]]:
-    """Group raw features by the UTC date in ``properties.time``."""
-
     grouped: dict[str, list[dict]] = {}
     seen: set[str] = set()
 
@@ -155,8 +124,6 @@ def ingest_usgs_parameter(
     collection_url: str,
     settings: Settings,
 ) -> list[str]:
-    """Fetch every missing day for one USGS parameter/station."""
-
     if not settings.usgs_api_key:
         raise ValueError("USGS_API_KEY is not set")
 
@@ -192,8 +159,8 @@ def ingest_usgs_parameter(
     lookback = settings.lookback_days
     for run_start, run_end in contiguous_runs(missing):
         for chunk_start, chunk_end in year_chunks(run_start, run_end):
-            # Fetch a lookback lead-in so each day's window is complete even
-            # across year boundaries.
+            # fetch a lookback lead-in so each day's window is complete across
+            # year boundaries
             fetch_start = window_start(
                 chunk_start, settings.usgs_historic_start_date, lookback
             )
@@ -223,7 +190,7 @@ def ingest_usgs_parameter(
                 )
 
                 if not features and day > grace_cutoff:
-                    # Recent days may not be published yet; retry next run.
+                    # recent days may not be published yet; retry next run
                     continue
 
                 day_payload = {
@@ -241,8 +208,6 @@ def ingest_usgs_parameter(
 
 
 def ingest_usgs(start_date: str | None = None) -> list[str]:
-    """Ingest raw USGS hydrology JSON for every active station/parameter."""
-
     settings = get_settings(start_date)
     stations = get_stations()
 

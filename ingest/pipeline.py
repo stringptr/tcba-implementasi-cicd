@@ -1,10 +1,3 @@
-"""Top level bronze ingestion pipeline.
-
-Orchestrates the two source ingestions. Silver/gold transformations are
-intentionally deferred; this stage only populates the bronze prefix of the
-Azure Data Lake Storage container.
-"""
-
 from __future__ import annotations
 
 from .open_meteo import ingest_open_meteo
@@ -12,8 +5,6 @@ from .usgs import ingest_usgs
 
 
 def bronze_pipeline(start_date: str | None = None) -> dict[str, list[str]]:
-    """Ingest Open-Meteo and USGS data into bronze for all active stations."""
-
     open_meteo_locations = ingest_open_meteo(start_date=start_date)
     usgs_locations = ingest_usgs(start_date=start_date)
 

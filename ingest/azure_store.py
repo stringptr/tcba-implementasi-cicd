@@ -1,22 +1,3 @@
-"""Helpers for writing raw JSON bronze partitions to Azure Data Lake Storage.
-
-Bronze stores the payload returned by the source APIs verbatim (no column
-renames, no metadata columns). Partitions use the bare-value hierarchy:
-
-* USGS: ``usgs/{daily|continuous}/parameter_code={code}/station_id={id}``
-* Open-Meteo: ``open-meteo/station_id={id}``
-
-Blob names are ``{BRONZE_PREFIX}/{relative}/ingest_date=YYYY-MM-DD/part-000.json``
-inside a single ADLS container. Every calendar day is stored as its own
-``ingest_date`` partition containing that day **plus the previous
-``LOOKBACK_DAYS`` days** (default 7), so a partition is an 8-day rolling window
-clipped at the dataset start. All dates are UTC. Writing is idempotent: existing
-parts are skipped so a backfill can be stopped and resumed later.
-
-Authentication uses ``DefaultAzureCredential``, which in GitHub Actions picks up
-the federated token that ``azure/login`` exports (no client secret).
-"""
-
 from __future__ import annotations
 
 import json
@@ -29,8 +10,6 @@ PART_FILE = "part-000.json"
 
 
 def date_range(start: str, end: str):
-    """Yield every ISO date from ``start`` to ``end`` (inclusive)."""
-
     cursor = date.fromisoformat(start)
     stop = date.fromisoformat(end)
     while cursor <= stop:
@@ -39,8 +18,6 @@ def date_range(start: str, end: str):
 
 
 def contiguous_runs(dates):
-    """Yield ``(start, end)`` tuples for runs of consecutive ISO dates."""
-
     ordered = sorted(dates)
     if not ordered:
         return
@@ -57,12 +34,7 @@ def contiguous_runs(dates):
 
 
 def year_chunks(start: str, end: str):
-    """Yield calendar-year windows covering ``start..end``.
-
-    The USGS ``continuous`` collection rejects ranges longer than 1100 days, so
-    yearly windows keep every request safely below that limit.
-    """
-
+    # yearly windows keep requests under the USGS continuous 1100-day limit
     cursor = date.fromisoformat(start)
     stop = date.fromisoformat(end)
     while cursor <= stop:
@@ -72,12 +44,6 @@ def year_chunks(start: str, end: str):
 
 
 def window_start(day: str, start: str, lookback_days: int) -> str:
-    """Return the first date of the lookback window for ``day``.
-
-    The window is clipped at the dataset ``start`` so the earliest partitions
-    contain fewer than ``lookback_days + 1`` days.
-    """
-
     candidate = (
         date.fromisoformat(day) - timedelta(days=lookback_days)
     ).isoformat()
@@ -85,8 +51,6 @@ def window_start(day: str, start: str, lookback_days: int) -> str:
 
 
 def usgs_prefix(station_site_no: str, data_type: str, parameter_code: str) -> str:
-    """Relative partition prefix for a USGS parameter/station."""
-
     return (
         f"usgs/{data_type}/parameter_code={parameter_code}"
         f"/station_id={station_site_no}"
@@ -94,8 +58,6 @@ def usgs_prefix(station_site_no: str, data_type: str, parameter_code: str) -> st
 
 
 def open_meteo_prefix(station_site_no: str) -> str:
-    """Relative partition prefix for an Open-Meteo station."""
-
     return f"open-meteo/station_id={station_site_no}"
 
 
@@ -127,8 +89,6 @@ def _blob_prefix(settings: Settings, prefix: str) -> str:
 
 
 def existing_dates(settings: Settings, prefix: str) -> set[str]:
-    """Return the set of ``ingest_date`` values that already have a part file."""
-
     container = _container_client(settings)
     blob_prefix = f"{_blob_prefix(settings, prefix)}/{PARTITION_PREFIX}"
     dates: set[str] = set()
@@ -147,11 +107,6 @@ def write_payload(
     ingest_date: str,
     payload: dict,
 ) -> str:
-    """Write ``payload`` as ``{prefix}/ingest_date=<date>/part-000.json``.
-
-    Returns the blob name that was written.
-    """
-
     blob_name = (
         f"{_blob_prefix(settings, prefix)}/"
         f"{PARTITION_PREFIX}{ingest_date}/{PART_FILE}"

@@ -1,5 +1,3 @@
-"""Environment driven configuration for the hydrology pipelines."""
-
 from __future__ import annotations
 
 import os
@@ -13,8 +11,7 @@ DEFAULT_LOOKBACK_DAYS = 7
 
 
 def _env(name: str, default: str | None = None) -> str | None:
-    """Read an environment variable, treating the empty string as unset."""
-
+    # empty string is treated as unset
     value = os.getenv(name)
     return value if value not in (None, "") else default
 
@@ -37,13 +34,7 @@ class Settings:
 
 
 def get_settings(start_date: str | None = None) -> Settings:
-    """Build settings from the environment, allowing the start date to be
-    overridden per run.
-
-    The end date is always yesterday (UTC) so the pipeline never ingests data
-    for the current day.
-    """
-
+    # end date is always yesterday (UTC) so the current day is never ingested
     return Settings(
         usgs_historic_start_date=start_date
         or _env("USGS_HISTORIC_START_DATE", DEFAULT_HISTORIC_START_DATE),
