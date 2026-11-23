@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  lint-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt ruff
+
+      - name: Lint
+        run: ruff check ingest
+
+      - name: Import smoke test
+        run: python -c "import ingest.pipeline"
+
+      - name: Run scraping code (1-day window, local output)
+        env:
+          USGS_API_KEY: ${{ secrets.USGS_API_KEY }}
+          BRONZE_LOCAL_DIR: ${{ github.workspace }}/ci-data
+          LOOKBACK_DAYS: "0"
+        run: |
+          export USGS_HISTORIC_START_DATE=$(date -u -d '1 day ago' +%F)
+          export OPEN_METEO_HISTORIC_START_DATE=$(date -u -d '1 day ago' +%F)
+          python -m ingest.pipeline
+
+      - name: Show scraped output
+        run: find ci-data -type f | sort
