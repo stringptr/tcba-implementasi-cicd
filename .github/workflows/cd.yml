@@ -32,7 +32,10 @@ jobs:
 
       - name: Run scraping pipeline
         env:
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
           AZURE_STORAGE_ACCOUNT: ${{ vars.AZURE_STORAGE_ACCOUNT }}
           AZURE_STORAGE_CONTAINER: ${{ vars.AZURE_STORAGE_CONTAINER }}
           USGS_API_KEY: ${{ secrets.USGS_API_KEY }}
+          PYTHONUNBUFFERED: "1"
         run: python -m ingest.pipeline

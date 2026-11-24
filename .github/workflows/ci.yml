@@ -23,7 +23,9 @@ jobs:
         run: ruff check ingest
 
       - name: Import smoke test
-        run: python -c "import ingest.pipeline"
+        run: |
+          python -c "import ingest.pipeline"
+          python -c "from ingest.azure_store import _credential; assert type(_credential()).__name__ == 'DefaultAzureCredential'"
 
       - name: Run scraping code (1-day window, local output)
         env:
