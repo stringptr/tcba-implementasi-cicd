@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import date, timedelta
 from pathlib import Path
+
+import requests
 
 from .settings import Settings
 
@@ -65,6 +68,32 @@ def open_meteo_prefix(station_site_no: str) -> str:
 _CLIENTS: dict[tuple, object] = {}
 
 
+def _oidc_assertion() -> str:
+    # fresh GitHub OIDC token per refresh; the login assertion expires in ~5 min
+    response = requests.get(
+        os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"],
+        params={"audience": "api://AzureADTokenExchange"},
+        headers={
+            "Authorization": f"bearer {os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']}"
+        },
+        timeout=30,
+    )
+    response.raise_for_status()
+    return response.json()["value"]
+
+
+def _credential():
+    client_id = os.environ.get("AZURE_CLIENT_ID")
+    tenant_id = os.environ.get("AZURE_TENANT_ID")
+    if client_id and tenant_id and os.environ.get("ACTIONS_ID_TOKEN_REQUEST_URL"):
+        from azure.identity import ClientAssertionCredential
+
+        return ClientAssertionCredential(tenant_id, client_id, _oidc_assertion)
+    from azure.identity import DefaultAzureCredential
+
+    return DefaultAzureCredential()
+
+
 def _container_client(settings: Settings):
     if not settings.azure_storage_account or not settings.azure_storage_container:
         raise RuntimeError(
@@ -72,14 +101,13 @@ def _container_client(settings: Settings):
             "write to Azure Data Lake Storage"
         )
 
-    from azure.identity import DefaultAzureCredential
     from azure.storage.blob import BlobServiceClient
 
     cache_key = (settings.azure_storage_account, settings.azure_storage_container)
     client = _CLIENTS.get(cache_key)
     if client is None:
         account_url = f"https://{settings.azure_storage_account}.blob.core.windows.net"
-        service = BlobServiceClient(account_url, credential=DefaultAzureCredential())
+        service = BlobServiceClient(account_url, credential=_credential())
         client = service.get_container_client(settings.azure_storage_container)
         _CLIENTS[cache_key] = client
     return client
