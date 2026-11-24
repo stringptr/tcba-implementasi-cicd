@@ -10,7 +10,12 @@ USGS_REQUESTS_PER_HOUR = 1_000
 OPEN_METEO_REQUESTS_PER_HOUR = 5_000
 
 DEFAULT_TIMEOUT = 180
-DEFAULT_MAX_429_RETRIES = 5
+DEFAULT_MAX_RETRIES = 5
+
+RETRYABLE_ERRORS = (
+    requests.exceptions.ConnectionError,
+    requests.exceptions.Timeout,
+)
 
 
 class RateLimiter:
@@ -37,20 +42,31 @@ def get_json(
     params: dict | None = None,
     headers: dict | None = None,
     timeout: int = DEFAULT_TIMEOUT,
-    max_429_retries: int = DEFAULT_MAX_429_RETRIES,
+    max_retries: int = DEFAULT_MAX_RETRIES,
 ) -> Any:
     attempt = 0
     while True:
         limiter.wait()
-        response = requests.get(url, params=params, headers=headers, timeout=timeout)
+        try:
+            response = requests.get(
+                url, params=params, headers=headers, timeout=timeout
+            )
+        except RETRYABLE_ERRORS:
+            attempt += 1
+            if attempt > max_retries:
+                raise
+            time.sleep(min(2**attempt, 60))
+            continue
 
-        if response.status_code == 429 and attempt < max_429_retries:
+        if attempt < max_retries and (
+            response.status_code == 429 or response.status_code >= 500
+        ):
             attempt += 1
             retry_after = response.headers.get("Retry-After")
             try:
                 delay = float(retry_after)
             except (TypeError, ValueError):
-                delay = 60.0
+                delay = min(2**attempt, 60)
             time.sleep(max(delay, 1.0))
             continue
 
